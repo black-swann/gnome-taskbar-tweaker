@@ -1,0 +1,11 @@
+.c*
+.c*/
+dist/
+schemas/gschemas.compiled
+*.zip
+*.log
+.DS_Store
+.env
+.env.*
+*.key
+*.pem

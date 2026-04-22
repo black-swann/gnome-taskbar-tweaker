@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.gnome-taskbar-tweaker"
+          path="/org/gnome/shell/extensions/gnome-taskbar-tweaker/">
+    <key name="layout-version" type="u">
+      <default>2</default>
+      <summary>Stored layout schema version</summary>
+      <description>
+        Version marker for the saved layout format.
+      </description>
+    </key>
+    <key name="panel-layout" type="as">
+      <default>[]</default>
+      <summary>Desired panel layout</summary>
+      <description>
+        Ordered entries in the form section:itemId for movable items across the left, center, and right panel sections, for example left:activities.
+      </description>
+    </key>
+    <key name="baseline-layout" type="as">
+      <default>[]</default>
+      <summary>Detected baseline panel layout</summary>
+      <description>
+        The first safe movable-item layout detected while the extension is enabled.
+      </description>
+    </key>
+    <key name="available-items" type="as">
+      <default>[]</default>
+      <summary>Discovered panel items</summary>
+      <description>
+        Runtime-discovered panel items encoded as JSON strings.
+      </description>
+    </key>
+    <key name="sync-generation" type="u">
+      <default>0</default>
+      <summary>Manual sync counter</summary>
+      <description>
+        Increment this value to ask the live extension to rescan panel items.
+      </description>
+    </key>
+    <key name="last-error" type="s">
+      <default>''</default>
+      <summary>Last runtime error</summary>
+      <description>
+        Most recent runtime error captured while applying the panel layout.
+      </description>
+    </key>
+  </schema>
+</schemalist>
