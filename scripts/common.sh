@@ -7,7 +7,7 @@ METADATA_FILE="${PROJECT_DIR}/metadata.json"
 
 read_metadata() {
     local field="$1"
-    node -p "require('${METADATA_FILE}').${field}"
+    python3 -c "import json; print(json.load(open('${METADATA_FILE}', encoding='utf-8'))['${field}'])"
 }
 
 extension_uuid() {

@@ -1,4 +1,5 @@
 import Adw from 'gi://Adw';
+import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 
@@ -84,6 +85,13 @@ class TaskbarTweakerPage extends Adw.PreferencesPage {
         resetRow.add_suffix(resetButton);
         resetRow.activatable_widget = resetButton;
         this._controlsGroup.add(resetRow);
+
+        const persistRow = new Adw.SwitchRow({
+            title: 'Persist Layout Across Logins',
+            subtitle: 'Keep saved positions for items that load later so your taskbar order survives logout and login.',
+        });
+        this._settings.bind('persist-layout', persistRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        this._controlsGroup.add(persistRow);
     }
 
     _refresh() {

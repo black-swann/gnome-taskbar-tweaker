@@ -1,10 +1,10 @@
-UUID := $(shell node -p "require('./metadata.json').uuid")
+UUID := $(shell python3 -c "import json; print(json.load(open('metadata.json', encoding='utf-8'))['uuid'])")
 EXTENSION_DIR := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 LOCAL_SCHEMA_DIR := $(HOME)/.local/share/glib-2.0/schemas
 SCHEMA_FILE := schemas/org.gnome.shell.extensions.gnome-taskbar-tweaker.gschema.xml
 DIST_DIR := dist
 METADATA_FILE := metadata.json
-VERSION := $(shell node -p "require('./$(METADATA_FILE)').version")
+VERSION := $(shell python3 -c "import json; print(json.load(open('./$(METADATA_FILE)', encoding='utf-8'))['version'])")
 RELEASE_NAME := gnome-taskbar-tweaker-v$(VERSION)
 PACKED_ZIP := $(DIST_DIR)/$(UUID).shell-extension.zip
 RELEASE_ZIP := $(DIST_DIR)/$(RELEASE_NAME).zip
@@ -15,9 +15,13 @@ schemas:
 	glib-compile-schemas schemas
 
 lint:
-	node --check extension.js
-	node --check prefs.js
-	node --check layout.js
+	@if command -v node >/dev/null 2>&1; then \
+		node --check extension.js; \
+		node --check prefs.js; \
+		node --check layout.js; \
+	else \
+		printf '%s\n' 'Skipping JavaScript syntax lint: node is not installed.'; \
+	fi
 
 check: schemas lint
 

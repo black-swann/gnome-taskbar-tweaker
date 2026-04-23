@@ -32,6 +32,7 @@ rg -n "token|secret|password|apikey|api_key|PRIVATE|ssh|BEGIN .* PRIVATE KEY" -S
 ```bash
 make check
 ./scripts/package.sh
+./scripts/smoke-test.sh --install
 ```
 
 - Optionally run the manual validation flow:

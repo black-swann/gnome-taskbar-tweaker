@@ -23,6 +23,13 @@
         The first safe movable-item layout detected while the extension is enabled.
       </description>
     </key>
+    <key name="persist-layout" type="b">
+      <default>true</default>
+      <summary>Keep the saved layout across logins</summary>
+      <description>
+        Preserve saved layout entries for items that are temporarily missing during login so they return to their stored position later in the session.
+      </description>
+    </key>
     <key name="available-items" type="as">
       <default>[]</default>
       <summary>Discovered panel items</summary>

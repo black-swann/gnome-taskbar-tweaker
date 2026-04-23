@@ -1,6 +1,6 @@
 # GNOME Taskbar Tweaker
 
-GNOME Taskbar Tweaker is a GNOME Shell 49 extension for reordering supported top-panel items across the left, center, and right sections.
+GNOME Taskbar Tweaker is a GNOME Shell 49/50 extension for reordering supported top-panel items across the left, center, and right sections.
 
 It stays deliberately conservative:
 
@@ -13,13 +13,14 @@ It stays deliberately conservative:
 
 - move supported panel items between left, center, and right
 - reorder items within a section
+- optionally keep the saved layout across logout/login cycles
 - refresh panel discovery after other extensions change
 - reset to the detected baseline layout
 - compact preferences UI with minimal controls
 
 ## Requirements
 
-- GNOME Shell `49`
+- GNOME Shell `49` or `50`
 - a local session where `gnome-extensions` and `gsettings` are available
 
 ## Install from source
@@ -27,11 +28,12 @@ It stays deliberately conservative:
 ```bash
 make check
 ./scripts/install.sh
-gnome-extensions enable "$(node -p "require('./metadata.json').uuid")"
+gnome-extensions enable "$(python3 -c "import json; print(json.load(open('metadata.json', encoding='utf-8'))['uuid'])")"
 ./scripts/open-prefs.sh
 ```
 
 If GNOME Shell does not pick up changes immediately, disable and re-enable the extension or start a fresh session.
+If `gnome-extensions info` still shows `OUT OF DATE` right after updating `metadata.json`, log out and back in once so GNOME Shell reloads the cached extension metadata.
 
 ## Development workflow
 
@@ -40,6 +42,7 @@ make check
 ./scripts/show-items.sh
 ./scripts/show-layout.sh
 ./scripts/show-status.sh
+./scripts/smoke-test.sh --install
 ./scripts/request-sync.sh
 ./scripts/manual-test.sh
 ```
@@ -72,5 +75,6 @@ Before publishing publicly, review `RELEASING.md`.
 In particular:
 
 - confirm the UUID in `metadata.json` matches the public namespace you want to keep long-term
+- increment the `version` field in `metadata.json` before packaging a new public build
 - confirm the copyright name in `LICENSE` is the one you want to publish
 - verify ignored local files stay out of the repository

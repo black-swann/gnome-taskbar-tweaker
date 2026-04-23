@@ -19,6 +19,7 @@ import {
 export default class GnomeTaskbarTweakerExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
+        this._migrateDefaultSettings();
         this._originalState = new Map();
         this._boxSignalIds = [];
         this._scheduledSyncId = null;
@@ -26,6 +27,7 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
 
         this._settingsSignals = [
             this._settings.connect('changed::panel-layout', () => this._scheduleSync('layout-changed')),
+            this._settings.connect('changed::persist-layout', () => this._scheduleSync('persist-layout-changed')),
             this._settings.connect('changed::sync-generation', () => this._scheduleSync('manual-refresh')),
         ];
 
@@ -131,6 +133,13 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
         this._settings.set_strv('baseline-layout', []);
         this._settings.set_strv('panel-layout', []);
         this._settings.set_uint('layout-version', CURRENT_LAYOUT_VERSION);
+    }
+
+    _migrateDefaultSettings() {
+        if (this._settings.get_user_value('persist-layout') !== null)
+            return;
+
+        this._settings.set_boolean('persist-layout', true);
     }
 
     _discoverPanelItems() {
@@ -255,6 +264,9 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
         const current = this._settings.get_strv('baseline-layout');
         const normalized = normalizeLayoutEntries(current);
 
+        if (this._settings.get_boolean('persist-layout') && normalized.length > 0)
+            return;
+
         if (normalized.length > 0) {
             const baselineIds = new Set(normalized.map(e => parseLayoutEntry(e)?.id).filter(Boolean));
             const liveIds = new Set(movableItems.map(item => item.id));
@@ -270,7 +282,9 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
     _sanitizeStoredLayout(movableItems) {
         const movableIds = new Set(movableItems.map(item => item.id));
         const current = this._settings.get_strv('panel-layout');
-        let sanitized = normalizeLayoutEntries(current).filter(entry => movableIds.has(parseLayoutEntry(entry)?.id));
+        const persistLayout = this._settings.get_boolean('persist-layout');
+        const normalizedCurrent = normalizeLayoutEntries(current);
+        let sanitized = normalizedCurrent.filter(entry => movableIds.has(parseLayoutEntry(entry)?.id));
 
         if (sanitized.length === 0)
             sanitized = normalizeLayoutEntries(this._settings.get_strv('baseline-layout'))
@@ -279,12 +293,51 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
         if (sanitized.length === 0)
             sanitized = buildDefaultLayout(movableItems);
 
-        const flattenedTarget = flattenLayout(buildTargetLayout(movableItems, sanitized));
+        let flattenedTarget = flattenLayout(buildTargetLayout(movableItems, sanitized));
+
+        if (persistLayout)
+            flattenedTarget = this._mergePersistedLayout(normalizedCurrent, flattenedTarget);
 
         if (!arraysEqual(current, flattenedTarget))
             this._settings.set_strv('panel-layout', flattenedTarget);
 
         return flattenedTarget;
+    }
+
+    _mergePersistedLayout(savedEntries, liveEntries) {
+        if (savedEntries.length === 0)
+            return liveEntries;
+
+        const liveEntryById = new Map();
+        for (const entry of liveEntries) {
+            const parsed = parseLayoutEntry(entry);
+            if (parsed)
+                liveEntryById.set(parsed.id, entry);
+        }
+
+        const merged = [];
+        for (const entry of savedEntries) {
+            const parsed = parseLayoutEntry(entry);
+            if (!parsed)
+                continue;
+
+            if (liveEntryById.has(parsed.id)) {
+                merged.push(liveEntryById.get(parsed.id));
+                liveEntryById.delete(parsed.id);
+            } else {
+                merged.push(entry);
+            }
+        }
+
+        for (const entry of liveEntries) {
+            const parsed = parseLayoutEntry(entry);
+            if (parsed && liveEntryById.has(parsed.id)) {
+                merged.push(entry);
+                liveEntryById.delete(parsed.id);
+            }
+        }
+
+        return merged;
     }
 
     _applyLayout(movableItems, sanitizedLayout) {

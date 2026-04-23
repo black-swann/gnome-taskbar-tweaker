@@ -1,10 +1,11 @@
 {
   "uuid": "gnome-taskbar-tweaker@betnbd",
   "name": "GNOME Taskbar Tweaker",
-  "description": "Reorder supported GNOME 49 panel items across left, center, and right sections.",
+  "description": "Reorder supported GNOME 49 and 50 panel items across left, center, and right sections.",
   "shell-version": [
-    "49"
+    "49",
+    "50"
   ],
   "settings-schema": "org.gnome.shell.extensions.gnome-taskbar-tweaker",
-  "version": 2
+  "version": 3
 }
