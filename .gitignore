@@ -9,3 +9,5 @@ schemas/gschemas.compiled
 .env.*
 *.key
 *.pem
+TASKS.local.md
+PROJECT.local.md
