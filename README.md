@@ -9,7 +9,7 @@ It stays deliberately conservative:
 - the extension captures a baseline layout so the panel can be reset safely
 - disabling the extension leaves the current panel order alone; use Reset before disabling if you want the captured baseline order
 
-![GNOME Taskbar Tweaker preferences](docs/screenshot.png)
+![GNOME Taskbar Tweaker preferences](docs/readme-screenshot.png)
 
 ## Features
 
