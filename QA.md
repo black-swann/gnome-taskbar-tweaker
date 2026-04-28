@@ -17,7 +17,7 @@ Validated in a GNOME Shell 49 session and rechecked against GNOME Shell 50 tooli
 - move controls update stored layout
 - persist-layout keeps saved positions for indicators that appear later in the session
 - reset restores the baseline layout
-- disable restores the original captured order
+- disabling the extension leaves the current panel order alone; reset first if you want the captured baseline order
 - metadata advertises GNOME Shell `50` compatibility
 - GNOME Shell may continue showing `State: OUT OF DATE` until the session is restarted after a metadata-only compatibility update
 

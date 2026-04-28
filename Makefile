@@ -26,13 +26,16 @@ lint:
 check: schemas lint
 
 install: schemas
+	rm -rf "$(EXTENSION_DIR)"
 	mkdir -p "$(EXTENSION_DIR)"
 	rsync -a --delete \
-		--exclude '.git' \
-		--exclude 'dist' \
-		--exclude '.DS_Store' \
-		--exclude 'schemas/gschemas.compiled' \
-		./ "$(EXTENSION_DIR)/"
+		metadata.json \
+		extension.js \
+		prefs.js \
+		layout.js \
+		schemas \
+		"$(EXTENSION_DIR)/"
+	rm -f "$(EXTENSION_DIR)/schemas/gschemas.compiled"
 	glib-compile-schemas "$(EXTENSION_DIR)/schemas"
 	mkdir -p "$(LOCAL_SCHEMA_DIR)"
 	cp "$(SCHEMA_FILE)" "$(LOCAL_SCHEMA_DIR)/"

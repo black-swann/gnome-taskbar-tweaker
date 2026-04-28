@@ -20,15 +20,15 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._migrateDefaultSettings();
-        this._originalState = new Map();
         this._boxSignalIds = [];
         this._scheduledSyncId = null;
         this._isApplyingLayout = false;
+        this._startupRetryCount = 0;
 
         this._settingsSignals = [
             this._settings.connect('changed::panel-layout', () => this._scheduleSync('layout-changed')),
             this._settings.connect('changed::persist-layout', () => this._scheduleSync('persist-layout-changed')),
-            this._settings.connect('changed::sync-generation', () => this._scheduleSync('manual-refresh')),
+            this._settings.connect('changed::sync-generation', () => this._syncFromPanel('manual-refresh')),
         ];
 
         this._connectPanelSignals();
@@ -46,19 +46,19 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
             this._settings.disconnect(signalId);
 
         for (const {box, signalId} of this._boxSignalIds ?? [])
-            box.disconnect(signalId);
-
-        this._restoreOriginalState();
+            this._safeDisconnect(box, signalId);
 
         this._boxSignalIds = [];
         this._settingsSignals = [];
-        this._originalState?.clear();
-        this._originalState = null;
+        this._startupRetryCount = 0;
         this._settings = null;
     }
 
     _connectPanelSignals() {
         for (const box of Object.values(this._getSectionBoxes())) {
+            if (!box)
+                continue;
+
             this._boxSignalIds.push({
                 box,
                 signalId: box.connect('child-added', () => {
@@ -80,7 +80,7 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
         if (this._scheduledSyncId)
             return;
 
-        this._scheduledSyncId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 75, () => {
+        this._scheduledSyncId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
             this._scheduledSyncId = null;
             this._syncFromPanel(reason);
             return GLib.SOURCE_REMOVE;
@@ -92,16 +92,20 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
             const discoveredItems = this._discoverPanelItems();
             const movableItems = getMovableItems(discoveredItems);
 
-            this._captureOriginalState(movableItems);
-            this._persistBaselineLayout(movableItems);
-
-            const sanitizedLayout = this._sanitizeStoredLayout(movableItems);
             if (movableItems.length === 0) {
+                if (this._shouldRetryStartupDiscovery(reason)) {
+                    this._scheduleSync('startup-retry');
+                    return;
+                }
+
                 this._persistAvailableItems(discoveredItems);
                 this._setLastError(`No movable panel items discovered during ${reason}.`);
                 return;
             }
 
+            this._persistBaselineLayout(movableItems);
+
+            const sanitizedLayout = this._sanitizeStoredLayout(movableItems);
             this._applyLayout(movableItems, sanitizedLayout);
             this._updateDiscoveredSections(discoveredItems, sanitizedLayout);
             this._persistAvailableItems(discoveredItems);
@@ -110,6 +114,17 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
             this._setLastError(error?.message ?? String(error));
             console.error(`[${this.uuid}] Failed to sync panel layout (${reason})`, error);
         }
+    }
+
+    _shouldRetryStartupDiscovery(reason) {
+        if (!['enable', 'startup-retry'].includes(reason))
+            return false;
+
+        if (this._startupRetryCount >= 20)
+            return false;
+
+        this._startupRetryCount += 1;
+        return true;
     }
 
     _updateDiscoveredSections(allItems, flatLayout) {
@@ -148,17 +163,15 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
         const discovered = [];
 
         for (const [section, box] of Object.entries(sectionBoxes)) {
-            box.get_children().forEach((actor, index) => {
+            this._getBoxChildren(box).forEach((actor, index) => {
                 const known = statusAreaMap.get(actor);
                 if (known) {
                     discovered.push({
-                        actor: known.container,
                         container: known.container,
                         id: known.id,
                         label: known.label,
                         movable: true,
                         section,
-                        statusItem: known.statusItem,
                         source: 'status-area',
                         visible: known.container.visible,
                     });
@@ -166,7 +179,6 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
                 }
 
                 discovered.push({
-                    actor,
                     id: this._buildUnsupportedId(section, actor, index),
                     label: this._describeActor(actor),
                     movable: false,
@@ -177,13 +189,58 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
             });
         }
 
+        if (getMovableItems(discovered).length === 0)
+            return this._discoverStatusAreaFallback(statusAreaMap, sectionBoxes);
+
         return discovered;
+    }
+
+    _discoverStatusAreaFallback(statusAreaMap, sectionBoxes) {
+        const discovered = [];
+
+        for (const known of statusAreaMap.values()) {
+            discovered.push({
+                container: known.container,
+                id: known.id,
+                label: known.label,
+                movable: true,
+                section: this._findContainerSection(known.container, sectionBoxes)
+                    ?? this._guessStatusAreaSection(known.id),
+                source: 'status-area',
+                visible: known.container.visible,
+            });
+        }
+
+        return discovered;
+    }
+
+    _findContainerSection(container, sectionBoxes) {
+        let actor = container;
+        for (let depth = 0; actor && depth < 6; depth++) {
+            for (const [section, box] of Object.entries(sectionBoxes)) {
+                if (actor === box)
+                    return section;
+            }
+            actor = actor.get_parent?.();
+        }
+
+        return null;
+    }
+
+    _guessStatusAreaSection(id) {
+        if (id === 'activities' || id === 'appMenu')
+            return 'left';
+
+        if (id === 'dateMenu')
+            return 'center';
+
+        return 'right';
     }
 
     _buildStatusAreaActorMap() {
         const actorMap = new Map();
 
-        for (const [id, item] of Object.entries(Main.panel.statusArea)) {
+        for (const [id, item] of Object.entries(Main.panel?.statusArea ?? {})) {
             if (!item)
                 continue;
 
@@ -191,7 +248,7 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
             const label = prettifyItemLabel(normalizedId);
             const container = item.container ?? item.actor ?? item;
             if (container)
-                actorMap.set(container, {id: normalizedId, label, statusItem: item, container});
+                actorMap.set(container, {id: normalizedId, label, container});
         }
 
         return actorMap;
@@ -228,28 +285,26 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
 
     _getSectionBoxes() {
         return {
-            left: Main.panel._leftBox,
-            center: Main.panel._centerBox,
-            right: Main.panel._rightBox,
+            left: Main.panel?._leftBox ?? null,
+            center: Main.panel?._centerBox ?? null,
+            right: Main.panel?._rightBox ?? null,
         };
     }
 
-    _captureOriginalState(movableItems) {
-        for (const item of movableItems) {
-            if (this._originalState.has(item.id))
-                continue;
+    _getBoxChildren(box) {
+        try {
+            return box?.get_children?.() ?? [];
+        } catch (error) {
+            console.warn(`[${this.uuid}] Skipping disposed panel section during discovery`, error);
+            return [];
+        }
+    }
 
-            const parent = item.container.get_parent();
-            const index = parent ? parent.get_children().indexOf(item.container) : -1;
-            this._originalState.set(item.id, {
-                id: item.id,
-                actor: item.container,
-                index,
-                parent,
-                section: item.section,
-                statusItem: item.statusItem,
-                visible: item.container.visible,
-            });
+    _safeDisconnect(object, signalId) {
+        try {
+            object.disconnect(signalId);
+        } catch (error) {
+            console.warn(`[${this.uuid}] Could not disconnect panel signal`, error);
         }
     }
 
@@ -356,12 +411,15 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
 
                 targetItems.forEach((item, index) => {
                     const container = item.container;
-                    if (!container)
+                    if (!container || !box)
                         return;
 
-                    this._removeActorFromParent(container);
-
-                    box.insert_child_at_index(container, section === 'right' ? -1 : index);
+                    try {
+                        this._removeActorFromParent(container);
+                        box.insert_child_at_index(container, section === 'right' ? -1 : index);
+                    } catch (error) {
+                        console.warn(`[${this.uuid}] Skipping disposed panel actor during layout apply`, error);
+                    }
                 });
             }
         } finally {
@@ -369,22 +427,14 @@ export default class GnomeTaskbarTweakerExtension extends Extension {
         }
     }
 
-    _restoreOriginalState() {
-        const originals = [...(this._originalState?.values() ?? [])]
-            .filter(state => state.actor && state.parent)
-            .sort((a, b) => a.index - b.index);
-
-        for (const state of originals) {
-            this._removeActorFromParent(state.actor);
-            state.parent.insert_child_at_index(state.actor, state.index);
-            state.actor.visible = state.visible;
-        }
-    }
-
     _removeActorFromParent(actor) {
-        const parent = actor?.get_parent?.();
-        if (parent)
-            parent.remove_child(actor);
+        try {
+            const parent = actor?.get_parent?.();
+            if (parent)
+                parent.remove_child(actor);
+        } catch (error) {
+            console.warn(`[${this.uuid}] Could not remove panel actor from parent`, error);
+        }
     }
 
     _setLastError(message) {
