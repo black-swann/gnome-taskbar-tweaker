@@ -145,3 +145,7 @@ In particular:
 - increment the `version` field in `metadata.json` before packaging a new public build
 - confirm the copyright name in `LICENSE` is the one you want to publish
 - verify ignored local files stay out of the repository
+
+## License
+
+MIT. See [LICENSE](LICENSE).
